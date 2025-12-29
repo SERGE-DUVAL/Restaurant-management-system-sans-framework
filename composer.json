@@ -1,0 +1,17 @@
+{
+    "name": "digitalmarket/backend",
+    "autoload": {
+        "psr-4": {
+            "src\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "sop",
+            "email": "sergeduvalsopnghontamia@gmail.com"
+        }
+    ],
+    "require": {
+        "vlucas/phpdotenv": "^5.6"
+    }
+}

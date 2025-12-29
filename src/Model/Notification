@@ -1,0 +1,41 @@
+<?php
+namespace src\Model;
+
+class Notification
+{
+    private $id;
+    private $userId;
+    private $message;
+    private $lu;
+    private $createdAt;
+
+    public function __construct($id, $userId, $message, $lu, $createdAt)
+    {
+        $this->id = $id;
+        $this->userId = $userId;
+        $this->message = $message;
+        $this->lu = $lu;
+        $this->createdAt = $createdAt;
+    }
+
+    public function isLu()
+    {
+        return $this->lu;
+    }
+    public function getMessage()
+    {
+        return $this->message;
+    }
+    public function getUserId()
+    {
+        return $this->userId;
+    }
+    public function getId()
+    {
+        return $this->id;
+    }
+    public function getCreatedAt()
+    {
+        return $this->createdAt;
+    }
+}
