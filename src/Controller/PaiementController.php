@@ -4,6 +4,8 @@ namespace src\Controller;
 use src\Config\Database;
 use src\Model\Paiement;
 use PDO;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 
 class PaiementController {
 
@@ -47,39 +49,103 @@ class PaiementController {
     }
 
     // Générer une facture (simple JSON)
-    public function generateInvoice($commandeId) {
-        $db = Database::getConnection();
+    public function generateInvoice($commandeId)
+{
+    $db = Database::getConnection();
 
-        // Récupérer le paiement
-        $stmt = $db->prepare("SELECT * FROM paiements WHERE commande_id = :commande_id");
-        $stmt->execute(['commande_id' => $commandeId]);
-        $paiement = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Paiement
+    $stmt = $db->prepare("SELECT * FROM paiements WHERE commande_id = :id");
+    $stmt->execute(['id' => $commandeId]);
+    $paiement = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$paiement) {
-            return json_encode( ['error' => 'Paiement introuvable']);
-        }
-
-        // Récupérer la commande et les plats associés
-        $cmdStmt = $db->prepare("SELECT * FROM commandes WHERE id = :id");
-        $cmdStmt->execute(['id' => $commandeId]);
-        $commande = $cmdStmt->fetch(PDO::FETCH_ASSOC);
-
-        $platsStmt = $db->prepare("
-            SELECT p.nom, cp.quantite, cp.prix_unitaire
-            FROM commande_plat cp
-            JOIN plats p ON cp.plat_id = p.id
-            WHERE cp.commande_id = :commande_id
-        ");
-        $platsStmt->execute(['commande_id' => $commandeId]);
-        $plats = $platsStmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // Générer la facture
-        $invoice = [
-            'commande' => $commande,
-            'paiement' => $paiement,
-            'plats' => $plats
-        ];
-
-        return json_encode( $invoice);
+    if (!$paiement) {
+        http_response_code(404);
+        echo json_encode(['message' => 'Paiement introuvable']);
+        return;
     }
+
+    // Commande
+    $cmdStmt = $db->prepare("SELECT * FROM commandes WHERE id = :id");
+    $cmdStmt->execute(['id' => $commandeId]);
+    $commande = $cmdStmt->fetch(PDO::FETCH_ASSOC);
+
+    // Plats
+    $platsStmt = $db->prepare("
+        SELECT p.nom, cp.quantite, cp.prix_unitaire
+        FROM commande_plat cp
+        JOIN plats p ON cp.plat_id = p.id
+        WHERE cp.commande_id = :id
+    ");
+    $platsStmt->execute(['id' => $commandeId]);
+    $plats = $platsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Calcul total
+    $total = 0;
+    foreach ($plats as $p) {
+        $total += $p['quantite'] * $p['prix_unitaire'];
+    }
+
+    // HTML facture
+    $html = "
+    <style>
+        body { font-family: DejaVu Sans, sans-serif; }
+        h1 { text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #000; padding: 8px; text-align: center; }
+        th { background: #f2f2f2; }
+        .total { font-weight: bold; }
+    </style>
+
+    <h1>FACTURE</h1>
+
+    <p>
+        <strong>Commande #:</strong> {$commande['id']}<br>
+        <strong>Date:</strong> {$commande['created_at']}<br>
+        <strong>Moyen de paiement:</strong> {$paiement['mode_paiement']}
+    </p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Plat</th>
+                <th>Quantité</th>
+                <th>Prix unitaire</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>";
+
+    foreach ($plats as $plat) {
+        $ligneTotal = $plat['quantite'] * $plat['prix_unitaire'];
+        $html .= "
+            <tr>
+                <td>{$plat['nom']}</td>
+                <td>{$plat['quantite']}</td>
+                <td>{$plat['prix_unitaire']} FCFA</td>
+                <td>{$ligneTotal} FCFA</td>
+            </tr>";
+    }
+
+    $html .= "
+        <tr class='total'>
+            <td colspan='3'>TOTAL À PAYER</td>
+            <td>{$total} FCFA</td>
+        </tr>
+        </tbody>
+    </table>";
+
+    // Dompdf
+    $options = new Options();
+    $options->set('defaultFont', 'DejaVu Sans');
+
+    $dompdf = new Dompdf($options);
+    $dompdf->loadHtml($html);
+    $dompdf->setPaper('A4', 'portrait');
+    $dompdf->render();
+
+    // Afficher dans le navigateur (imprimable)
+    $dompdf->stream("facture_commande_{$commandeId}.pdf", [
+        "Attachment" => false // true = téléchargement
+    ]);
+}
 }
